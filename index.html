@@ -4,14 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Trackers</title>
-<link rel="manifest" href="manifest.json">
-<link rel="icon" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
-<meta name="theme-color" content="#12161b">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Trackers">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -797,21 +789,45 @@
       wrap.innerHTML = '<div class="empty-note">No sessions yet — your first one will show up here.</div>';
       return;
     }
-    var rows = sessions.slice().reverse().slice(0, 100).map(function(s){
-      var mins = Math.round(s.durationSec / 60);
-      return '<tr>' +
-        '<td class="mono">' + formatDate(s.dateISO) + '</td>' +
-        '<td>' + escapeHtml(s.category) + '</td>' +
-        '<td class="mono">' + mins + 'm</td>' +
-        '<td class="focus-cell">' + s.focus + '/5</td>' +
-        '<td class="mono">' + s.distractions + '</td>' +
-        '<td class="notes" title="' + escapeHtml(s.notes || '') + '">' + escapeHtml(s.notes || '—') + '</td>' +
-        '</tr>';
+
+    var recent = sessions.slice(-200);
+    var groups = {};
+    recent.forEach(function(s){
+      var key = formatDateKey(s.dateISO);
+      if(!groups[key]) groups[key] = [];
+      groups[key].push(s);
+    });
+    var dayKeys = Object.keys(groups).sort().reverse();
+
+    var html = dayKeys.map(function(key){
+      var dayEntries = groups[key].slice().sort(function(a, b){ return new Date(a.dateISO) - new Date(b.dateISO); });
+      var dayTotalSec = dayEntries.reduce(function(a, s){ return a + s.durationSec; }, 0);
+      var dayAvgFocus = dayEntries.reduce(function(a, s){ return a + s.focus; }, 0) / dayEntries.length;
+      var d = new Date(key + 'T00:00:00');
+      var weekday = d.toLocaleDateString(undefined, { weekday: 'short' });
+      var monthDay = (d.getMonth()+1) + '/' + d.getDate() + '/' + String(d.getFullYear()).slice(2);
+
+      var rows = dayEntries.map(function(s){
+        return '<tr>' +
+          '<td>' + escapeHtml(s.category) + '</td>' +
+          '<td class="mono">' + formatTimeOfDay(s.dateISO) + '</td>' +
+          '<td class="mono">' + formatDurationMin(s.durationSec) + '</td>' +
+          '<td class="focus-cell">' + s.focus + '/5</td>' +
+          '<td class="mono">' + s.distractions + '</td>' +
+          '<td class="notes" title="' + escapeHtml(s.notes || '') + '">' + escapeHtml(s.notes || '—') + '</td>' +
+          '</tr>';
+      }).join('');
+
+      return '<div class="day-group">' +
+        '<div class="day-group-header"><span>' + weekday + ', ' + monthDay + '</span>' +
+        '<span class="day-total mono">' + formatDurationMin(dayTotalSec) + ' · avg focus ' + dayAvgFocus.toFixed(1) + '</span></div>' +
+        '<table class="log"><thead><tr>' +
+        '<th>Category</th><th class="mono">Time</th><th class="mono">Duration</th>' +
+        '<th class="mono">Focus</th><th class="mono">Distract.</th><th>Notes</th>' +
+        '</tr></thead><tbody>' + rows + '</tbody></table></div>';
     }).join('');
-    wrap.innerHTML = '<table class="log"><thead><tr>' +
-      '<th class="mono">Date</th><th>Category</th><th class="mono">Duration</th>' +
-      '<th class="mono">Focus</th><th class="mono">Distract.</th><th>Notes</th>' +
-      '</tr></thead><tbody>' + rows + '</tbody></table>';
+
+    wrap.innerHTML = html;
   }
 
   function renderPatterns(){
